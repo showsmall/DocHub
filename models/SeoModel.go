@@ -1,6 +1,20 @@
 package models
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+	"time"
+
+	"os"
+
+	"strconv"
+
+	"fmt"
+
+	"github.com/TruthHun/DocHub/helper"
+	"github.com/TruthHun/gotil/sitemap"
+	"github.com/astaxie/beego/orm"
+)
 
 //SEO配置表
 type Seo struct {
@@ -11,6 +25,14 @@ type Seo struct {
 	Title       string `orm:"column(Title);default({title})"`             //SEO标题
 	Keywords    string `orm:"column(Keywords);default({keywords})"`       //SEO关键字
 	Description string `orm:"column(Description);default({description})"` //SEO摘要
+}
+
+func NewSeo() *Seo {
+	return &Seo{}
+}
+
+func GetTableSeo() string {
+	return getTable("seo")
 }
 
 //获取SEO
@@ -41,11 +63,76 @@ func (this *Seo) GetByPage(page string, defaultTitle, defaultKeywords, defaultDe
 		}
 		return item
 	}
-	O.QueryTable(TableSeo).Filter("Page", page).One(&seoStruct)
+	orm.NewOrm().QueryTable(GetTableSeo()).Filter("Page", page).One(&seoStruct)
 	if seoStruct.Id > 0 {
 		seo["Title"] = replaceFunc(seoStruct.Title, defSeo)
 		seo["Keywords"] = replaceFunc(seoStruct.Keywords, defSeo)
 		seo["Description"] = replaceFunc(seoStruct.Description, defSeo)
 	}
 	return seo
+}
+
+//baseUrl := this.Ctx.Input.Scheme() + "://" + this.Ctx.Request.Host
+//if host := beego.AppConfig.String("sitemap_host"); len(host) > 0 {
+//	baseUrl = this.Ctx.Input.Scheme() + "://" + host
+//}
+//生成站点地图
+func (this *Seo) BuildSitemap() {
+	//更新站点地图
+	helper.Logger.Info(fmt.Sprintf("[%v]更新站点地图[start]", time.Now().Format("2006-01-02 15:04:05")))
+	var (
+		files   []string
+		fileNum int
+		Sitemap = sitemap.NewSitemap("1.0", "utf-8")
+		si      []sitemap.SitemapIndex
+		count   int64
+		limit   = 10000 //每个sitemap文件，限制10000个链接
+		domain  = strings.ToLower(NewSys().GetByField("DomainPc").DomainPc)
+		o       = orm.NewOrm()
+	)
+	if !(strings.HasPrefix(domain, "https://") || strings.HasPrefix(domain, "http://")) {
+		domain = "http://" + domain
+	}
+	domain = strings.TrimRight(domain, "/")
+	//文档总数
+	count, _ = o.QueryTable(GetTableDocumentInfo()).Filter("Status__gt", -1).Count()
+	cnt := int(count)
+	if fileNum = cnt / limit; cnt%limit > 0 {
+		fileNum = fileNum + 1
+	}
+	//创建文件夹
+	os.MkdirAll("sitemap", os.ModePerm)
+	for i := 0; i < fileNum; i++ {
+		var docs []DocumentInfo
+		o.QueryTable(GetTableDocumentInfo()).Filter("Status__gt", -1).Limit(limit).Offset(i*limit).All(&docs, "Id", "TimeCreate")
+		if len(docs) > 0 {
+			//文件
+			file := "sitemap/doc-" + strconv.Itoa(i) + ".xml"
+			files = append(files, file)
+			var su []sitemap.SitemapUrl
+			for _, doc := range docs {
+				su = append(su, sitemap.SitemapUrl{
+					Loc:        domain + "/view/" + strconv.Itoa(doc.Id),
+					Lastmod:    time.Unix(int64(doc.TimeCreate), 0).Format("2006-01-02 15:04:05"),
+					ChangeFreq: sitemap.WEEKLY,
+					Priority:   0.9,
+				})
+			}
+			if err := Sitemap.CreateSitemapContent(su, file); err != nil {
+				helper.Logger.Error("sitemap生成失败：" + err.Error())
+			}
+		}
+	}
+	if len(files) > 0 {
+		for _, f := range files {
+			si = append(si, sitemap.SitemapIndex{
+				Loc:     domain + "/" + f,
+				Lastmod: time.Now().Format("2006-01-02 15:04:05"),
+			})
+		}
+	}
+	if err := Sitemap.CreateSitemapIndex(si, filepath.Join(helper.RootPath, "sitemap.xml")); err != nil {
+		helper.Logger.Error("sitemap生成失败：" + err.Error())
+	}
+	helper.Logger.Info(fmt.Sprintf("[%v]更新站点地图[end]", time.Now().Format("2006-01-02 15:04:05")))
 }

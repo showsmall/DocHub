@@ -28,34 +28,6 @@
 				</div>
 			</div>
 
-			<!--<div class="panel panel-default">-->
-				<!--<div class="panel-heading">趋势信息（文档趋势、用户趋势、金币趋势）</div>-->
-				<!--<div class="panel-body">-->
-					<!--<div class="col-md-6 col-sm-12 col-xs-12">-->
-						<!--<div class="panel panel-primary text-center no-boder bg-color-green green">-->
-							<!--<div class="panel-left pull-left green">-->
-								<!--<i class="fa fa-bar-chart-o fa-5x"></i>-->
-							<!--</div>-->
-							<!--<div class="panel-right pull-right">-->
-								<!--<h3>12322</h3>-->
-								<!--<strong>文档数量</strong>-->
-							<!--</div>-->
-						<!--</div>-->
-					<!--</div>-->
-					<!--<div class="col-md-6 col-sm-12 col-xs-12">-->
-						<!--<div class="panel panel-primary text-center no-boder bg-color-red red">-->
-							<!--<div class="panel-left pull-left red">-->
-								<!--<i class="fa fa fa-users fa-5x"></i>-->
-							<!--</div>-->
-							<!--<div class="panel-right pull-right">-->
-								<!--<h3>123132</h3>-->
-								<!--<strong>用户数量</strong>-->
-							<!--</div>-->
-						<!--</div>-->
-					<!--</div>-->
-				<!--</div>-->
-			<!--</div>-->
-
 			<div class="panel panel-default">
                 <div class="panel-heading">系统信息</div>
 	            <div class="panel-body">
@@ -68,11 +40,7 @@
 	                            </tr>
 	                            <tr>
 	                                <td>版本</td>
-	                                <td>v1.0 beta</td>
-	                            </tr>
-	                             <tr>
-	                                <td>开源</td>
-	                                <td><a href="https://github.com/TruthHun/DocHub/" target="_blank">https://github.com/TruthHun/DocHub/</a></td>
+	                                <td>{{.Version}}</td>
 	                            </tr>
 	                            <tr>
 	                                <td>语言</td>
@@ -80,16 +48,28 @@
 	                            </tr>
 	                            <tr>
 	                                <td>框架</td>
-	                                <td><a href="http://beego.me" target="_blank">beego1.9</a></td>
+	                                <td><a href="http://beego.me" target="_blank">Beego {{.BeegoVersion}}</a></td>
 	                            </tr>
 	                            <tr>
 	                                <td>作者</td>
-	                                <td>皇虫(TruthHun)</td>
+	                                <td><a href="https://github.com/TruthHun" target="_blank" title="皇虫">皇虫(TruthHun)</a></td>
 	                            </tr>
 	                            <tr>
 	                                <td>邮箱</td>
 	                                <td>TruthHun@QQ.COM</td>
 	                            </tr>
+                                 <tr>
+									 <td>开源地址</td>
+									 <td>
+										 <a href="https://github.com/TruthHun/DocHub/" target="_blank">https://github.com/TruthHun/DocHub/</a>
+										 <span class="color-dark-white">|</span>
+										 <a href="https://gitee.com/TruthHun/DocHub/" target="_blank">https://gitee.com/TruthHun/DocHub/</a>
+									 </td>
+                                 </tr>
+                                 <tr>
+                                     <td>帮助文档</td>
+                                     <td><a href="https://www.bookstack.cn/books/dochub" target="_blank" title="书栈网">https://www.bookstack.cn/books/dochub</a></td>
+                                 </tr>
 	                        </tbody>
 	                    </table>
 	                </div>

@@ -9,6 +9,7 @@ import (
 
 	"fmt"
 
+	"github.com/TruthHun/DocHub/helper"
 	"github.com/astaxie/beego"
 )
 
@@ -23,18 +24,19 @@ type BaseController struct {
 //初始化函数
 func (this *BaseController) Prepare() {
 	var ok bool
-	//this.Sys, _ = models.ModelSys.Get()
-	this.Sys = models.GlobalSys
+	this.Sys, _ = models.NewSys().Get()
 	//检测是否已登录，未登录则跳转到登录页
 	AdminId := this.GetSession("AdminId")
 	this.AdminId, ok = AdminId.(int)
+	this.Data["Admin"], _ = models.NewAdmin().GetById(this.AdminId)
 	if !ok || this.AdminId == 0 {
 		this.Redirect("/admin/login", 302)
 		return
 	}
-	version := beego.AppConfig.String("version")
-	if beego.AppConfig.String("runmode") != "prod" {
-		version = fmt.Sprintf("v%v.%v", version, time.Now().Unix())
+
+	version := helper.VERSION
+	if helper.Debug {
+		version = fmt.Sprintf("%v.%v", version, time.Now().Unix())
 	}
 	this.Data["Version"] = version
 	//后台关闭XSRF功能
@@ -47,7 +49,13 @@ func (this *BaseController) Prepare() {
 	this.Layout = "Admin/" + this.TplTheme + "/layout.html"
 	//当前模板静态文件
 	this.Data["TplStatic"] = "/static/Admin/" + this.TplTheme
-	this.Data["PreviewDomain"] = beego.AppConfig.String("oss::PreviewUrl")
+	//this.Data["PreviewDomain"] = beego.AppConfig.String("oss::PreviewUrl")
+	if cs, err := models.NewCloudStore(false); err == nil {
+		this.Data["PreviewDomain"] = cs.GetPublicDomain()
+	} else {
+		helper.Logger.Error(err.Error())
+		this.Data["PreviewDomain"] = ""
+	}
 	this.Data["Sys"] = this.Sys
 	this.Data["Title"] = "文库系统管理后台"
 	this.Data["Lang"] = "zh-CN"
@@ -96,7 +104,7 @@ func (this *BaseController) Error501() {
 func (this *BaseController) ErrorDb() {
 	this.Layout = ""
 	this.Data["content"] = "Database is now down"
-	this.Data["content_zh"] = "数据库别外星人抢走了"
+	this.Data["content_zh"] = "数据库被外星人抢走了"
 	this.TplName = "error.html"
 }
 
@@ -133,7 +141,11 @@ func (this *BaseController) Del() {
 }
 
 //响应json
-func (this *BaseController) ResponseJson(status int, msg string, data ...interface{}) {
+func (this *BaseController) ResponseJson(isSuccess bool, msg string, data ...interface{}) {
+	status := 0
+	if isSuccess {
+		status = 1
+	}
 	ret := map[string]interface{}{"status": status, "msg": msg}
 	if len(data) > 0 {
 		ret["data"] = data[0]

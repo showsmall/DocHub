@@ -3,8 +3,7 @@ package models
 
 import (
 	"fmt"
-
-	"github.com/alexcesaro/mail/mailer"
+	"net/url"
 
 	"github.com/TruthHun/DocHub/helper"
 
@@ -19,98 +18,33 @@ import (
 
 	"os"
 
-	"net/mail"
-
-	"os/exec"
 	"strconv"
 
 	"time"
 
+	"database/sql"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
-//Ormer对象
-var O orm.Ormer
-
 //注意一下，varchar最多能存储65535个字符
-
-//以下是数据表model对象
-var (
-	ModelAdmin         = new(Admin)           //管理员表
-	ModelAd            = new(Ad)              //广告内容表
-	ModelAdPosition    = new(AdPosition)      //广告位
-	ModelCollectFolder = new(CollectFolder)   //收藏夹
-	ModelBanner        = new(Banner)          //banner
-	ModelCategory      = new(Category)        //分类
-	ModelCoinLog       = new(CoinLog)         //金币记录
-	ModelCollect       = new(Collect)         //收藏内容
-	ModelDoc           = new(Document)        //文档
-	ModelDocInfo       = new(DocumentInfo)    //文档数据信息
-	ModelDocStore      = new(DocumentStore)   //文档存储
-	ModelDocRecycle    = new(DocumentRecycle) //回收站
-	ModelDocRemark     = new(DocumentRemark)  //文档备注
-	ModelDocIllegal    = new(DocumentIllegal) //非法文档
-	ModelDocComment    = new(DocumentComment) //文档评论
-	ModelFriend        = new(Friend)          //友链
-	ModelPages         = new(Pages)           //单页
-	ModelRelate        = new(Relate)          //相关文档
-	ModelReport        = new(Report)          //举报
-	ModelSeo           = new(Seo)             //SEO
-	ModelSign          = new(Sign)            //签到
-	ModelSuggest       = new(Suggest)         //建议
-	ModelSys           = new(Sys)             //系统
-	ModelUser          = new(User)            //用户
-	ModelUserInfo      = new(UserInfo)        //用户信息
-	ModelOss           = new(Oss)             //OSS
-	ModelWord          = new(Word)            //关键字
-	ModelFreeDown      = new(FreeDown)        //免费下载，如果文档时收费下载，则用户下载第一次之后，在一定的时间范围内，再次下载则免费
-	ModelSearchLog     = new(SearchLog)       //搜索日志
-	ModelDocText       = new(DocText)         //文档文本内容
-	ModelCrawlWords    = new(CrawlWords)      //采集关键字
-	ModelCrawlFiles    = new(CrawlFiles)      //采集文件的信息
-	ModelGitbook       = new(Gitbook)         //Gitbook文档信息存储表
-	ModelConfig        = new(Config)          //配置
-)
-
-//以下是数据表
-var (
-	TableUser          = GetTable("user")
-	TableUserInfo      = GetTable("user_info")
-	TableCollect       = GetTable("collect")
-	TableCollectFolder = GetTable("collect_folder")
-	TableSeo           = GetTable("seo")
-	TableSearchLog     = GetTable("search_log")
-	TablePages         = GetTable("pages")
-	TableReport        = GetTable("report")
-	TableDocInfo       = GetTable("document_info")
-	TableDoc           = GetTable("document")
-	TableDocText       = GetTable("doc_text")
-	TableDocStore      = GetTable("document_store")
-	TableCategory      = GetTable("category")
-	TableFreeDown      = GetTable("free_down")
-	TableWord          = GetTable("word")
-	TableDocIllegal    = GetTable("document_illegal")
-	TableDocComment    = GetTable("document_comment")
-	TableDocRecycle    = GetTable("document_recycle")
-	TableDocRemark     = GetTable("document_remark")
-	TableSys           = GetTable("sys")
-	TableGitbook       = GetTable("gitbook")
-	TableConfig        = GetTable("config")
-)
 
 //以下是数据库全局数据变量
 var (
-	GlobalSys               Sys                               //全局系统设置
-	GlobalGitbookPublishing bool                      = false //是否正在发布gitbook书籍，如果是，则不能再点击发布
-	GlobalGitbookNextAbled  bool                      = true  //是否可以继续采集和发布下一本数据，如果true，则表示可以继续下载和发布下一本电子书，否则执行等待操作
-	GlobalConfig            []Config                          //全局配置文件
-	GlobalConfigMap         = make(map[string]string)         //配置文件的全局map
+	GlobalSys Sys //全局系统设置
 )
 
 //以下是表字段查询
 var Fields = map[string]map[string]string{
-	TableUser:     helper.StringSliceToMap(GetFields(ModelUser)),
-	TableUserInfo: helper.StringSliceToMap(GetFields(ModelUserInfo)),
+	GetTableUser():     helper.StringSliceToMap(GetFields(NewUser())),
+	GetTableUserInfo(): helper.StringSliceToMap(GetFields(NewUserInfo())),
+}
+
+func init() {
+	//如果存在app.conf文件，则表示程序已安装，执行数据库初始化
+	if helper.IsInstalled {
+		Init()
+	}
 }
 
 //初始化数据库注册
@@ -125,82 +59,84 @@ func Init() {
 		orm.Debug = true
 		orm.RunSyncdb("default", false, true)
 	}
-	O = orm.NewOrm()
-
 	//安装初始数据
 	install()
-
-	//全局变量赋值
-	ModelConfig.UpdateGlobal() //配置文件全局变量更新
-	ModelSys.UpdateGlobal()    //更新系统配置的全局变量
-
 }
 
 //注册数据库
 func RegisterDB() {
 	orm.RegisterDriver("mysql", orm.DRMySQL)
 	models := []interface{}{
-		ModelUser,
-		ModelUserInfo,
-		ModelAdmin,
-		ModelCategory,
-		ModelDoc,
-		ModelDocInfo,
-		ModelDocStore,
-		ModelDocRecycle,
-		ModelDocIllegal,
-		ModelDocComment,
-		ModelBanner,
-		ModelRelate,
-		ModelCollectFolder,
-		ModelCollect,
-		ModelAdPosition,
-		ModelAd,
-		ModelFriend,
-		ModelSys,
-		ModelWord,
-		ModelSeo,
-		ModelPages,
-		ModelSign,
-		ModelCoinLog,
-		ModelReport,
-		ModelSuggest,
-		ModelDocRemark,
-		ModelFreeDown,
-		ModelSearchLog,
-		ModelDocText,
-		ModelCrawlWords,
-		ModelCrawlFiles,
-		ModelGitbook,
-		ModelConfig,
+		NewUser(),
+		NewUserInfo(),
+		NewAdmin(),
+		NewCategory(),
+		NewDocument(),
+		NewDocumentInfo(),
+		NewDocumentStore(),
+		NewDocumentRecycle(),
+		NewDocumentIllegal(),
+		NewDocumentComment(),
+		NewBanner(),
+		NewRelate(),
+		NewCollectFolder(),
+		NewCollect(),
+		NewFriend(),
+		NewSys(),
+		NewWord(),
+		NewSeo(),
+		NewPages(),
+		NewSign(),
+		NewCoinLog(),
+		NewReport(),
+		NewSuggest(),
+		NewDocumentRemark(),
+		NewFreeDown(),
+		NewSearchLog(),
+		NewDocText(),
+		NewConfig(),
+		//NewAdPosition(),
+		//NewAd(),
 	}
-	orm.RegisterModelWithPrefix(beego.AppConfig.String("db::prefix"), models...)
-	db_user := beego.AppConfig.String("db::user")
-	db_password := beego.AppConfig.String("db::password")
-	db_database := beego.AppConfig.String("db::database")
-	db_charset := beego.AppConfig.String("db::charset")
-	db_host := beego.AppConfig.String("db::hostInternal")
-	if beego.AppConfig.String("runmode") == "dev" {
-		db_host = beego.AppConfig.String("db::hostOuter")
+	orm.RegisterModelWithPrefix(beego.AppConfig.DefaultString("db::prefix", "hc_"), models...)
+	dbUser := beego.AppConfig.String("db::user")
+	dbPassword := beego.AppConfig.String("db::password")
+	if envpass := os.Getenv("MYSQL_PASSWORD"); envpass != "" {
+		dbPassword = envpass
 	}
-	db_port := beego.AppConfig.String("db::port")
-	dblink := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s", db_user, db_password, db_host, db_port, db_database, db_charset)
-	//下面两个参数后面要放到app.conf提供用户配置使用
-	// (可选)设置最大空闲连接
+	dbDatabase := beego.AppConfig.String("db::database")
+	if envdatabase := os.Getenv("MYSQL_DATABASE"); envdatabase != "" {
+		dbDatabase = envdatabase
+	}
+	dbCharset := beego.AppConfig.String("db::charset")
+	dbHost := beego.AppConfig.String("db::host")
+	if envhost := os.Getenv("MYSQL_HOST"); envhost != "" {
+		dbHost = envhost
+	}
+	dbPort := beego.AppConfig.String("db::port")
+	if envport := os.Getenv("MYSQL_PORT"); envport != "" {
+		dbPort = envport
+	}
+	loc := "Local"
+	if timezone := beego.AppConfig.String("db::timezone"); timezone != "" {
+		loc = url.QueryEscape(timezone)
+	}
+	dbLink := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=%s&loc=%v", dbUser, dbPassword, dbHost, dbPort, dbDatabase, dbCharset, loc)
 	maxIdle := beego.AppConfig.DefaultInt("db::maxIdle", 50)
-	// (可选) 设置最大数据库连接 (go >= 1.2)
 	maxConn := beego.AppConfig.DefaultInt("db::maxConn", 300)
-	if err := orm.RegisterDataBase("default", "mysql", dblink, maxIdle, maxConn); err != nil {
+	if err := orm.RegisterDataBase("default", "mysql", dbLink, maxIdle, maxConn); err != nil {
 		panic(err)
 	}
-
 }
 
 //获取带表前缀的数据表
 //@param            table               数据表
-func GetTable(table string) string {
-	prefix := beego.AppConfig.String("db::prefix")
-	return prefix + strings.TrimPrefix(table, prefix)
+func getTable(table string) string {
+	prefix := beego.AppConfig.DefaultString("db::prefix", "hc_")
+	if !strings.HasPrefix(table, prefix) {
+		table = prefix + table
+	}
+	return table
 }
 
 //根据指定的表和id删除指定的记录，如果在删除记录的时候也删除记录中记录的文件，则不能调用该方法
@@ -209,7 +145,7 @@ func GetTable(table string) string {
 //@return           affected                影响的记录数
 //@return           err                     错误
 func DelByIds(table string, id ...interface{}) (affected int64, err error) {
-	return O.QueryTable(GetTable(table)).Filter("Id__in", id...).Delete()
+	return orm.NewOrm().QueryTable(getTable(table)).Filter("Id__in", id...).Delete()
 }
 
 //根据指定的表和id条件更新表字段，不支持批量更新
@@ -220,7 +156,7 @@ func DelByIds(table string, id ...interface{}) (affected int64, err error) {
 //@return           affected                影响的记录数
 //@return           err                     错误
 func UpdateByIds(table string, field string, value interface{}, id ...interface{}) (affected int64, err error) {
-	return O.QueryTable(GetTable(table)).Filter("Id__in", id...).Update(orm.Params{
+	return orm.NewOrm().QueryTable(getTable(table)).Filter("Id__in", id...).Update(orm.Params{
 		field: value,
 	})
 }
@@ -233,7 +169,7 @@ func UpdateByIds(table string, field string, value interface{}, id ...interface{
 //@return           affected                影响的记录数
 //@return           err                     错误
 func UpdateByField(table string, data map[string]interface{}, filter string, filterValue ...interface{}) (affected int64, err error) {
-	return O.QueryTable(GetTable(table)).Filter(filter, filterValue...).Update(data)
+	return orm.NewOrm().QueryTable(getTable(table)).Filter(filter, filterValue...).Update(data)
 }
 
 //设置字段值减小
@@ -244,17 +180,19 @@ func UpdateByField(table string, data map[string]interface{}, filter string, fil
 //@param                conditionArgs   查询条件参数
 //@return               err             返回错误
 func Regulate(table, field string, step int, condition string, conditionArgs ...interface{}) (err error) {
-	table = GetTable(table) //表处理
-	mark := "+"             //符号
-	if step < 0 {           //步长处理
+	mark := "+"   //符号
+	if step < 0 { //步长处理
 		step = -step
 		mark = "-"
 	}
-	sql := fmt.Sprintf("update %v set %v=%v%v? where %v", table, field, field, mark, condition)
+	sql := fmt.Sprintf("update %v set %v=%v%v? where %v", getTable(table), field, field, mark, condition)
+	if step < 0 {
+		sql = fmt.Sprintf("update %v set %v=%v%v? where %v and %v>0", getTable(table), field, field, mark, condition, field)
+	}
 	if len(conditionArgs) > 0 {
-		_, err = O.Raw(sql, step, conditionArgs[0:]).Exec()
+		_, err = orm.NewOrm().Raw(sql, step, conditionArgs[0:]).Exec()
 	} else {
-		_, err = O.Raw(sql, step).Exec()
+		_, err = orm.NewOrm().Raw(sql, step).Exec()
 	}
 	return err
 }
@@ -269,7 +207,7 @@ func Regulate(table, field string, step int, condition string, conditionArgs ...
 //@return           rows            返回的记录数
 //@return           err             错误
 func GetList(table string, p, listRows int, condition *orm.Condition, orderby ...string) (params []orm.Params, rows int64, err error) {
-	rows, err = O.QueryTable(GetTable(table)).SetCond(condition).Limit(listRows).Offset((p - 1) * listRows).OrderBy(orderby...).Values(&params)
+	rows, err = orm.NewOrm().QueryTable(getTable(table)).SetCond(condition).Limit(listRows).Offset((p - 1) * listRows).OrderBy(orderby...).Values(&params)
 	return params, rows, err
 }
 
@@ -320,28 +258,17 @@ func ToTree(params []orm.Params, Node string, value interface{}) []orm.Params {
 //@param            listRows    每页显示记录数
 //@param            accuracy    是否精确搜索
 func Search(wd, sourceType, order string, p, listRows, accuracy int) (res Result) {
-	//TODO:文档搜索功能，之前是使用Coreseek来搭建并提供接口进行搜索的，但是现在coreseek用不了了，后期更换为elasticsearch来实现全文搜索。目前暂时用like查询
-
-	//var (
-	//	json_str string
-	//	index           = beego.AppConfig.DefaultString("index", "wenku")
-	//	api      string = beego.AppConfig.String("SearchApi")
-	//	err      error
-	//)
-	//api_url := fmt.Sprintf(api+"?type=%v&index=%v&order=%v&p=%v&listRows=%v&accuracy=%v&wd=%v", helper.UrlEscape(sourceType), index, helper.UrlEscape(order), p, listRows, accuracy, helper.UrlEscape(wd))
-	//if json_str, err = httplib.Get(api_url).SetTimeout(5*time.Second, 5*time.Second).String(); err != nil {
-	//	helper.Logger.Error(err.Error())
-	//}
-	//json.Unmarshal([]byte(json_str), &res)
 
 	//========== like 查询  ==============
 	//TODO:目前的查询没有排序、没有分类等，需要上elasticsearch
 
+	//SELECT * from hc_document d left JOIN hc_document_info i on d.Id=i.Id LEFT JOIN hc_document_store s on i.DsId=s.Id where d.Title LIKE '%js%' GROUP BY s.Id  ORDER by i.Dcnt DESC
+	//fields := "" //查询的字段
 	start := time.Now().UnixNano()
 	res.Word = []string{wd}
 	res.Msg = "ok"
 	res.Status = 1
-	qs := O.QueryTable(TableDoc).Filter("Title__icontains", wd)
+	qs := orm.NewOrm().QueryTable(GetTableDocument()).Filter("Title__icontains", wd)
 	if res.Total, _ = qs.Count(); res.Total > 0 {
 		var (
 			docs []Document
@@ -355,6 +282,90 @@ func Search(wd, sourceType, order string, p, listRows, accuracy int) (res Result
 	}
 	end := time.Now().UnixNano()
 	res.Time = float64(end-start) / 1000000000
+	return
+}
+
+//使用MySQL的like查询
+//@param            wd          搜索关键字
+//@param            sourceType  搜索的资源类型，可选择：doc、ppt、xls、pdf、txt、other、all
+//@param            order       排序，可选值：new(最新)、down(下载)、page(页数)、score(评分)、size(大小)、collect(收藏)、view（浏览）、default(默认)
+//@param            p           页码
+//@param            listRows    每页显示记录数
+func SearchByMysql(wd, sourceType, order string, p, listRows int) (data []orm.Params, total int64) {
+	tables := []string{GetTableDocumentInfo() + " i", GetTableDocument() + " d", GetTableDocumentStore() + " ds"}
+	on := []map[string]string{
+		{"i.Id": "d.Id"},
+		{"i.DsId": "ds.Id"},
+	}
+	fields := map[string][]string{
+		"i":  {"Score", "TimeCreate", "Id", "Dcnt", "Vcnt", "Price"},
+		"d":  {"Title", "Description"},
+		"ds": {"Page", "Size", "ExtCate", "Md5"},
+	}
+	//排序
+	orderBy := []string{}
+	switch strings.ToLower(order) {
+	case "new":
+		orderBy = []string{"i.Id desc"}
+	case "down":
+		orderBy = []string{"i.Dcnt desc"}
+	case "page":
+		orderBy = []string{"ds.Page desc"}
+	case "score":
+		orderBy = []string{"i.Score desc"}
+	case "size":
+		orderBy = []string{"ds.Size desc"}
+	case "collect":
+		orderBy = []string{"i.Ccnt desc"}
+	case "view":
+		orderBy = []string{"i.Vcnt desc"}
+	}
+	cond := " i.Status>=0 and d.Title like ? "
+	//文档类型过滤条件
+	ExtNum := 0 //这些也暂时写死了，后面再优化....
+	switch strings.ToLower(sourceType) {
+	case "doc":
+		ExtNum = helper.EXT_NUM_WORD
+	case "ppt":
+		ExtNum = helper.EXT_NUM_PPT
+	case "xls":
+		ExtNum = helper.EXT_NUM_EXCEL
+	case "pdf":
+		ExtNum = helper.EXT_NUM_PDF
+	case "txt":
+		ExtNum = helper.EXT_NUM_TEXT
+	case "other":
+		ExtNum = helper.EXT_NUM_OTHER
+	}
+	if ExtNum > 0 {
+		cond = cond + " and ds.ExtNum=" + strconv.Itoa(ExtNum)
+	}
+	o := orm.NewOrm()
+	//数量统计
+	if sql, err := LeftJoinSqlBuild(tables, on, map[string][]string{"i": []string{"Count"}}, 1, 100000000, nil, nil, cond); err == nil {
+		sql = strings.Replace(sql, "i.Count", "count(d.Id) cnt", -1)
+		var params []orm.Params
+		o.Raw(sql, "%"+wd+"%").Values(&params)
+		if len(params) > 0 {
+			total, _ = strconv.ParseInt(params[0]["cnt"].(string), 10, 64)
+		}
+		helper.Logger.Debug("统计SQL:%v", sql)
+	} else {
+		helper.Logger.Error(err.Error())
+		helper.Logger.Debug(sql, wd)
+	}
+	if total == 0 {
+		return
+	}
+	//数据查询
+	if sql, err := LeftJoinSqlBuild(tables, on, fields, p, listRows, orderBy, nil, cond); err == nil {
+		helper.Logger.Debug(sql, wd)
+		o.Raw(sql, "%"+wd+"%").Values(&data)
+	} else {
+		helper.Logger.Error(err.Error())
+		helper.Logger.Debug(sql, wd)
+	}
+
 	return
 }
 
@@ -458,98 +469,6 @@ func joinOn(table string, usedTables []string, on []map[string]string) (newon []
 	return
 }
 
-//将PDF文件转成svg，并把文件更新到oss上【注意：svg存放的文件夹是xmd5对MD5字符串加密后的文件夹】
-//@param            file            pdf文件
-//@param            totalPage       pdf文件页数
-//@return           files           生成的pdf文件
-//@return           err             错误
-func Pdf2Svg(file string, totalPage int, md5str string) (err error) {
-	var (
-		width  int
-		height int
-	)
-
-	//文件夹
-	folder := strings.TrimSuffix(strings.ToLower(file), ".pdf")
-	folder = strings.TrimSuffix(folder, "/")
-	//os.MkdirAll(folder, 0777)//注意：这里不要创建文件夹！！
-	//如果文件夹folder已经存在了，则需要先删除
-	os.MkdirAll(folder, os.ModePerm)
-	defer os.RemoveAll(folder)
-	pdf2svg := beego.AppConfig.String("pdf2svg")                  //pdf转svg命令
-	compress := beego.AppConfig.DefaultBool("compressSvg", false) //是否压缩svg
-	//处理pdf转svg
-	for i := 0; i < totalPage; i++ {
-		num := i + 1
-		svgfile := fmt.Sprintf("%v/%v.svg", folder, num)
-		//Usage: pdf2svg <in file.pdf> <out file.svg> [<page no>]
-		cmd := exec.Command(pdf2svg, file, svgfile, strconv.Itoa(num))
-		if helper.Debug {
-			beego.Debug("pdf转svg", cmd.Args)
-		}
-		if err := cmd.Run(); err != nil {
-			helper.Logger.Error(err.Error())
-		} else {
-			if num == 1 {
-				//封面处理
-				if cover, err := helper.ConvertToJpeg(svgfile, false); err == nil {
-					ModelOss.MoveToOss(cover, md5str+".jpg", true, true)
-				}
-				//获取svg的宽高(pt)
-				width, height = helper.ParseSvgWidthAndHeight(svgfile)
-				if _, err := UpdateByField(TableDocStore, map[string]interface{}{"Width": width, "Height": height}, "Md5", md5str); err != nil {
-					helper.Logger.Error(err.Error())
-				}
-			}
-			//添加文字水印
-			helper.SvgTextWatermark(svgfile, beego.AppConfig.String("watermark"), width/6, height/4)
-
-			//压缩svg内容
-			helper.CompressSvg(svgfile)
-			ModelOss.MoveToOss(svgfile, md5str+"/"+strconv.Itoa(num)+".svg", true, true, compress)
-		}
-	}
-
-	//将内容更新到数据库
-	//TODO:获取文档的文本内容，使用calibre实现
-	//content := strings.Join(contents, "")
-	//if len(content) > 5000 {
-	//	content = helper.SubStr(content, 0, 4800)
-	//}
-	//var docText = DocText{Md5: md5str, Content: content}
-	//if _, _, err := O.ReadOrCreate(&docText, "Md5"); err != nil {
-	//	helper.Logger.Error(err.Error())
-	//}
-
-	//扫尾工作，如果还存在文件，则继续将文件移到oss
-	filenum := 1 //假设有一个svg或者jpg文件
-	for {
-		files := helper.ScanDir(folder)
-		if filenum > 0 {
-			//将l重置为0
-			filenum = 0
-			for _, file := range files {
-				//svg结尾
-				if strings.HasSuffix(file, ".svg") { //svg结尾的，都是文档页
-					slice := strings.Split(file, "/")
-					ModelOss.MoveToOss(file, fmt.Sprintf("%v/%v", md5str, slice[len(slice)-1]), true, true, compress)
-					filenum++ //
-				} else if strings.HasSuffix(file, ".jpg") { //jpg结尾的，基本都是封面图片
-					ModelOss.MoveToOss(file, md5str+".jpg", true, true)
-					filenum++
-				}
-			}
-		} else {
-			break
-		}
-	}
-	//删除文件夹
-	if filenum == 0 {
-		go os.RemoveAll(folder)
-	}
-	return
-}
-
 //替换写入【注意：表中必须要有一个除了主键外的唯一键】
 //@param            table           需要写入的table
 //@param            params          需要写入的数据
@@ -560,15 +479,15 @@ func ReplaceInto(table string, params map[string]interface{}) (err error) {
 		values []interface{}
 		sql    string
 	)
+	table = getTable(table)
 	if len(params) > 0 {
-		table = GetTable(table)
 		for field, value := range params {
 			fields = append(fields, field)
 			values = append(values, value)
 		}
 		marks := make([]string, len(values)+1)
 		sql = fmt.Sprintf("REPLACE INTO `%v`(`%v`) VALUES (%v)", table, strings.Join(fields, "`,`"), strings.Join(marks, "?"))
-		_, err = O.Raw(sql, values...).Exec()
+		_, err = orm.NewOrm().Raw(sql, values...).Exec()
 	} else {
 		err = errors.New("需要写入的数据不能为空")
 	}
@@ -580,31 +499,55 @@ func ReplaceInto(table string, params map[string]interface{}) (err error) {
 //@param            cond            查询条件
 //@return           cnt             统计的记录数
 func Count(table string, cond *orm.Condition) (cnt int64) {
-	cnt, _ = O.QueryTable(GetTable(table)).SetCond(cond).Count()
+	cnt, _ = orm.NewOrm().QueryTable(getTable(table)).SetCond(cond).Count()
 	return
 }
 
-//发送邮件
-//@param            to          string          收件人
-//@param            subject     string          邮件主题
-//@param            content     string          邮件内容
-//@return           error                       发送错误
-func SendMail(to, subject, content string) error {
-	port := beego.AppConfig.DefaultInt("email::port", 80)
-	host := beego.AppConfig.String("email::host")
-	username := beego.AppConfig.String("email::username")
-	password := beego.AppConfig.String("email::password")
-	msg := &mail.Message{
-		mail.Header{
-			"From":         {username},
-			"To":           {to},
-			"Reply-To":     {beego.AppConfig.DefaultString("mail::replyto", username)},
-			"Subject":      {subject},
-			"Content-Type": {"text/html"},
-		},
-		strings.NewReader(content),
+//是否已收藏文档
+//@param			did			文档id，即document id
+//@param			uid			用户id
+//@return			bool		bool值，true表示已收藏，否则未收藏
+func DoesCollect(did, uid int) bool {
+	if uid == 0 {
+		return false
 	}
-	m := mailer.NewMailer(host, username, password, port)
-	err := m.Send(msg)
-	return err
+	var params []orm.Params
+	sql := fmt.Sprintf("select c.Id from %v cf left join %v c on c.cid=cf.id where c.Did=? and cf.Uid=? limit 1", GetTableCollectFolder(), GetTableCollect())
+	rows, err := orm.NewOrm().Raw(sql, did, uid).Values(&params)
+	if err != nil {
+		helper.Logger.Error(err.Error())
+	}
+	if rows > 0 && err == nil {
+		return true
+	}
+	return false
+}
+
+//检查数据库是否存在
+//@param            host            数据库地址
+//@param            port            端口
+//@param            password        密码
+//@param            database        数据库
+//@return           err             错误
+func CheckDatabaseIsExist(host string, port int, username, password, database string) (err error) {
+	var (
+		db      *sql.DB
+		timeout = make(chan bool, 1)
+	)
+	go func() {
+		if db, err = sql.Open("mysql", fmt.Sprintf("%v:%v@tcp(%v:%v)/%v?charset=utf8",
+			username, password, host, port, database,
+		)); err == nil {
+			err = db.Ping()
+		}
+		timeout <- false
+	}()
+	time.AfterFunc(3*time.Second, func() {
+		timeout <- true
+	})
+
+	if t := <-timeout; t {
+		err = errors.New("MySQL数据库连接失败，请检查数据库链接是否正确")
+	}
+	return
 }

@@ -1,7 +1,14 @@
 
 <div class="container">
     <div class="row">
-        <div class="col-xs-8 wenku-left">
+
+        {{template "UserRight" .}}
+
+        <div class="col-xs-9 wenku-left pull-left">
+
+            {{template "Tabs" .}}
+
+
             <div class="panel panel-default">
                 {{if gt .Cid 0}}
                 <div class="panel-heading clearfix">
@@ -37,8 +44,8 @@
                             {{range .Lists}}
                             <div class="col-xs-3">
                                 <a href="/view/{{.Id}}" target="_blank" title="{{.Title}}" class="thumbnail">
-                                    <img class="img-responsive" src="{{DefPic .Md5 "cover"}}"/>
-                                    <img class="wenku-icon" alt="{{.ExtCate}}" src="/static/Home/default/img/{{.ExtCate}}_24.png"/>
+                                    <img class="img-responsive" alt="{{.Title}} 封面" onerror="this.src='/static/Common/img/cover.jpg'" src="{{DefaultImage .Md5}}"/>
+                                    <img class="wenku-icon" alt="{{.ExtCate}}文档" src="/static/Home/default/img/{{.ExtCate}}_24.png"/>
                                     <div class="wenku-title">
                                         {{.Title}}
                                         <hr>
@@ -69,7 +76,7 @@
                                 {{range .Lists}}
                                 <li class="clearfix">
                                     <div class="col-xs-5 wenku-text-ellipsis">
-                                        <a href="/view/{{.Id}}" title="{{.Title}}" target="_blank"><img src="/static/Home/default/img/{{.ExtCate}}_24.png"/> {{.Title}}</a>
+                                        <a href="/view/{{.Id}}" title="{{.Title}}" target="_blank"><img alt="{{.ExtCate}}文档" src="/static/Home/default/img/{{.ExtCate}}_24.png"/> {{.Title}}</a>
                                     </div>
                                     <div class="col-xs-2"><span class="wenku-star star-{{StarVal (Interface2Int .Score) false}}"></span></div>
                                     <div class="col-xs-1"> {{HandlePageNum .Page}}</div>
@@ -101,15 +108,14 @@
                     {{if .Lists}}{{else}}
                         <div class="help-block text-center">暂无分享文档</div>
                     {{end}}
-
+                    {{if .Page}}
                     <ul class="pagination">
                         {{str2html .Page}}
                     </ul>
+                    {{end}}
                 </div>
             </div>
         </div>
-
-        {{template "UserRight" .}}
 
     </div>
 </div>

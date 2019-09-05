@@ -1,9 +1,12 @@
 package helper
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/hex"
 	"fmt"
 	"html/template"
+	"image"
 	"math/rand"
 
 	"crypto/md5"
@@ -37,32 +40,34 @@ import (
 	"github.com/TruthHun/DocHub/helper/crawl"
 	"github.com/astaxie/beego"
 	"github.com/astaxie/beego/cache"
+	"github.com/disintegration/imaging"
 	"github.com/huichen/sego"
 	"rsc.io/pdf"
 )
 
-var (
-	Debug     = false
-	StaticExt = make(map[string]bool)
-)
-
 func init() {
-	Debug = beego.AppConfig.String("runmode") == "dev"
-	exts := strings.Split(beego.AppConfig.String("StaticExt"), ",")
+	//如果存在配置文件，则表示程序已经安装
+	_, err := os.Stat("conf/app.conf")
+	if err == nil {
+		IsInstalled = true
+	}
+	setDefaultConfig()
+	exts := strings.Split(beego.AppConfig.DefaultString("StaticExt", DEFAULT_STATIC_EXT), ",")
 	for _, ext := range exts {
 		StaticExt[strings.ToLower(strings.TrimSpace(ext))] = true
+	}
+	if _, err = os.Stat(RootPath); err != nil {
+		err = os.MkdirAll(RootPath, os.ModePerm)
+		if err != nil {
+			Logger.Error(err.Error())
+			panic(err.Error())
+		}
 	}
 }
 
 //比较两个内容的字符串类型是否相等
 func Equal(itf1, itf2 interface{}) bool {
 	return fmt.Sprintf("%v", itf1) == fmt.Sprintf("%v", itf2)
-}
-
-//xmd5加密，扩展加密
-//@param            md5str          MD5字符串
-func Xmd5(md5str interface{}) string {
-	return fmt.Sprintf("%v", md5str)
 }
 
 //语言国际化，目前默认为中文
@@ -75,7 +80,7 @@ func I18n(tag string, lang ...string) string {
 
 //MD5加密函数
 //@str          string          需要进行加密的字符串
-func MyMD5(str string) string {
+func MD5Crypt(str string) string {
 	h := md5.New()
 	h.Write([]byte(str))
 	return hex.EncodeToString(h.Sum(nil))
@@ -264,10 +269,10 @@ func Default(val, defVal interface{}, preventZero ...bool) string {
 //@return           string                      返回生成的随机字符串
 func RandStr(size int, kind int) string {
 	ikind, kinds, result := kind, [][]int{[]int{10, 48}, []int{26, 97}, []int{26, 65}}, make([]byte, size)
-	is_all := kind > 2 || kind < 0
+	isAll := kind > 2 || kind < 0
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < size; i++ {
-		if is_all { // random ikind
+		if isAll { // random ikind
 			ikind = rand.Intn(3)
 		}
 		scope, base := kinds[ikind][0], kinds[ikind][1]
@@ -288,37 +293,58 @@ func FormatByte(size int) string {
 
 	num := fmt.Sprintf("%.2f", fsize)
 
-	return string(num) + units[i]
+	return string(num) + " " + units[i]
 }
 
 //获取文档扩展名分类以及扩展名分类对应的catenum数字
-func GetExtCate(ext string) (string, int) {
-	var (
-		extcate string
-		extnum  int
-	)
-	ext = strings.ToLower(ext)
+//@param            ext         扩展名
+//@return           extCate     文档类型(字符串)
+//@return           extNum      文档类型(整型)
+func GetExtCate(ext string) (extCate string, extNum int) {
+	ext = strings.ToLower(strings.TrimLeft(ext, "."))
+	extNum = EXT_NUM_OTHER
 	switch ext {
 	case "doc", "docx", "rtf", "wps", "odt":
-		extcate = "word"
-		extnum = 1
+		extCate = EXT_CATE_WORD
+		extNum = EXT_NUM_WORD
 	case "ppt", "pptx", "pps", "ppsx", "dps", "odp", "pot":
-		extcate = "ppt"
-		extnum = 2
+		extCate = EXT_CATE_PPT
+		extNum = EXT_NUM_PPT
 	case "xls", "xlsx", "et", "ods":
-		extcate = "excel"
-		extnum = 3
+		extCate = EXT_CATE_EXCEL
+		extNum = EXT_NUM_EXCEL
 	case "pdf":
-		extcate = "pdf"
-		extnum = 4
+		extCate = EXT_CATE_PDF
+		extNum = EXT_NUM_PDF
 	case "txt":
-		extcate = "text"
-		extnum = 5
-	case "umd", "chm", "epub", "mobi":
-		extcate = ext
-		extnum = 6
+		extCate = EXT_CATE_TEXT
+		extNum = EXT_NUM_TEXT
+	case EXT_CATE_OTHER_UMD, EXT_CATE_OTHER_CHM, EXT_CATE_OTHER_EPUB, EXT_CATE_OTHER_MOBI: // cate other
+		extCate = ext
 	}
-	return extcate, extnum
+	return
+}
+
+//获取文档扩展名分类以及扩展名分类对应的catenum数字
+//@param            ext         扩展名
+//@return           extCate     文档类型(字符串)
+//@return           extNum      文档类型(整型)
+func GetExtCateByExtNum(num int) (extCate string) {
+	switch num {
+	case EXT_NUM_WORD:
+		extCate = EXT_CATE_WORD
+	case EXT_NUM_PPT:
+		extCate = EXT_CATE_PPT
+	case EXT_NUM_EXCEL:
+		extCate = EXT_CATE_EXCEL
+	case EXT_NUM_PDF:
+		extCate = EXT_CATE_PDF
+	case EXT_NUM_TEXT:
+		extCate = EXT_CATE_TEXT
+	case EXT_NUM_OTHER:
+		extCate = EXT_CATE_OTHER
+	}
+	return
 }
 
 //PdfProcedure专用
@@ -333,7 +359,7 @@ type PdfRet struct {
 //@param            file            pdf文件
 //@return           pages           pdf文件页码
 //@return           err             错误
-func GetPdfPagesNum(file string) (pages int, err error) {
+func getPdfPagesNum(file string) (pages int, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = errors.New(fmt.Sprintf("%v", r))
@@ -344,49 +370,6 @@ func GetPdfPagesNum(file string) (pages int, err error) {
 		pages = reader.NumPage()
 	}
 	return
-}
-
-//将PDF文件转成jpg图片格式。注意：如果pdf只有一页，则文件后缀不会出现"-0.jpg"这种情况，否则会出现"-0.jpg,-1.jpg"等
-//@param            coverFile       imagick可以转化成jpg的封面文件，如svg、pdf文件
-//@param            removeFile      最后是否删除原文件
-//@return           cover           封面文件
-//@return           err             错误
-func ConvertToJpeg(pdffile string, removeFile bool) (cover string, err error) {
-	convert := beego.AppConfig.DefaultString("imagick", "convert")
-	cover = pdffile + ".jpg"
-	cmd := exec.Command(convert, "-density", "150", "-quality", "100", pdffile, cover)
-	if Debug {
-		beego.Debug("转化封面图片：", cmd.Args)
-	}
-	err = cmd.Run()
-	if err == nil && removeFile {
-		os.Remove(pdffile)
-	}
-	return cover, err
-}
-
-//office文档转pdf，返回转化后的文档路径和错误
-func OfficeToPdf(office string) error {
-	//	soffice --headless --invisible --convert-to pdf doctest.docx
-	soffice := beego.AppConfig.DefaultString("soffice", "soffice")
-	dir_slice := strings.Split(office, "/")
-	dir := strings.Join(dir_slice[0:(len(dir_slice)-1)], "/")
-	cmd := exec.Command(soffice, "--headless", "--invisible", "--convert-to", "pdf", office, "--outdir", dir)
-	if Debug {
-		Logger.Debug("office 文档转 PDF:", cmd.Args)
-	}
-	return cmd.Run()
-}
-
-//非office文档(.txt,.mobi,.epub)转pdf文档
-func UnofficeToPdf(file string) error {
-	calibre := beego.AppConfig.DefaultString("calibre", "ebook-convert")
-	pdfile := filepath.Dir(file) + "/" + strings.TrimSuffix(filepath.Base(file), filepath.Ext(file)) + ".pdf"
-	cmd := exec.Command(calibre, file, pdfile)
-	if Debug {
-		beego.Debug("非Office文档转成PDF：", cmd.Args)
-	}
-	return cmd.Run()
 }
 
 //解析svg的原始宽高
@@ -408,27 +391,6 @@ func ParseSvgWidthAndHeight(file string) (width, height int) {
 		}
 	} else {
 		Logger.Error(err.Error())
-	}
-	return
-}
-
-//压缩svg文件
-//@param			file			需要压缩的svg文件
-//@return			err				错误
-func CompressSvg(file string) (err error) {
-	var b []byte
-	if b, err = ioutil.ReadFile(file); err == nil {
-		str := string(b)
-		str = strings.Replace(str, "\t", "", -1)
-		str = strings.Replace(str, "\n", "", -1)
-		str = strings.Replace(str, "\r", "", -1)
-		//去除标签之间的空格，如果是存在代码预览的页面，不要替换空格，否则预览的代码会错乱
-		r, _ := regexp.Compile(">\\s{1,}<")
-		str = r.ReplaceAllString(str, "><")
-		//多个空格替换成一个空格
-		r2, _ := regexp.Compile("\\s{1,}")
-		str = r2.ReplaceAllString(str, " ")
-		err = ioutil.WriteFile(file, []byte(str), os.ModePerm)
 	}
 	return
 }
@@ -475,27 +437,33 @@ func ScanDir(dir string) (files []string) {
 }
 
 //统计PDF的页数
-//@param            filepath            文件路径
+//@param            file                文件路径
 //@return           pagenum             页码，当返回错误时，页码为0
 //@return           err                 错误
-func CountPdfPages(filepath string) (pagenum int, err error) {
-	if bs, err := ioutil.ReadFile(filepath); err != nil {
-		return pagenum, err
-	} else {
-		content := string(bs)
-		arr := strings.Split(content, "/Pages")
-		l := len(arr)
-		if l > 0 {
-			arr = strings.Split(arr[l-1], "endobj")
-			if l = len(arr); l > 0 {
-				return len(strings.Split(arr[0], "0 R")) - 1, nil
-			} else {
-				return 0, errors.New(fmt.Sprintf(`%v:"endobj"分割时失败`, filepath))
-			}
-		} else {
-			return 0, errors.New(fmt.Sprintf(`%v:"/Pages"分割时失败`, filepath))
-		}
+func CountPDFPages(file string) (pageNum int, err error) {
+	// 优先使用这种PDF分页统计的方式，如果PDF版本比支持，则再使用下一种PDF统计方式。所以这里报错了的话，不返回
+	pageNum, err = getPdfPagesNum(file)
+	if err == nil {
+		return
 	}
+
+	var p []byte
+	p, err = ioutil.ReadFile(file)
+	if err != nil {
+		return
+	}
+
+	content := string(p)
+	arr := strings.Split(content, "/Pages")
+	l := len(arr)
+	if l > 0 {
+		arr = strings.Split(arr[l-1], "endobj")
+		if l = len(arr); l > 0 {
+			return len(strings.Split(arr[0], "0 R")) - 1, nil
+		}
+		return 0, errors.New(fmt.Sprintf(`%v:"endobj"分割时失败`, file))
+	}
+	return 0, errors.New(fmt.Sprintf(`%v:"/Pages"分割时失败`, file))
 }
 
 //文档评分处理
@@ -677,19 +645,6 @@ func HeightLight(title string, words []string) template.HTML {
 	return template.HTML(title)
 }
 
-//举报原因
-func ReportReason(num interface{}) (reason string) {
-	slice := strings.Split(beego.AppConfig.String("ReportReason"), ";")
-	var dict = make(map[string]string)
-	for _, v := range slice {
-		vv := strings.Split(v, ":")
-		if len(vv) == 2 {
-			dict[vv[0]] = vv[1]
-		}
-	}
-	return dict[fmt.Sprintf("%v", num)]
-}
-
 //字符串截取
 func SubStr(str interface{}, start, length int) string {
 	v := fmt.Sprintf("%v", str)
@@ -726,6 +681,7 @@ func DownFile(fileUrl, savePath string, cookies string) (md5str, localFile, file
 	if err != nil {
 		return
 	}
+	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		err = errors.New(fmt.Sprintf("HTTP响应头错误：%v。文件下载地址：%v", resp.Status, fileUrl))
 		return
@@ -739,7 +695,7 @@ func DownFile(fileUrl, savePath string, cookies string) (md5str, localFile, file
 	}
 	ext = strings.ToLower(ext)
 	os.MkdirAll(savePath, 0777)
-	tmpFile := strings.TrimSuffix(savePath, "/") + "/" + MyMD5(filename) + ext
+	tmpFile := strings.TrimSuffix(savePath, "/") + "/" + MD5Crypt(filename) + ext
 	if err = req.ToFile(tmpFile); err != nil {
 		return
 	}
@@ -783,4 +739,95 @@ func UpperFirst(str string) string {
 		strings.Replace(str, str[0:1], strings.ToUpper(str[0:1]), 1)
 	}
 	return str
+}
+
+//页数处理，处理页数为0或者页数为空的时候的显示
+func HandlePageNum(PageNum interface{}) string {
+	pn := strings.TrimSpace(fmt.Sprintf("%v", PageNum))
+	if pn == "0" || pn == "" {
+		return " -- "
+	}
+	return pn
+}
+
+//使用SVGO压缩svg文件
+//@param            input           需要压缩的原文件
+//@param            output          压缩后的文件路径
+//@param            err             压缩错误
+func CompressBySVGO(input, output string) (err error) {
+	svgo := strings.TrimSpace(GetConfig("depend", "svgo", "svgo"))
+	args := []string{"-i", input, "-o", output}
+	if strings.HasPrefix(svgo, "sudo") {
+		args = append([]string{strings.TrimPrefix(svgo, "sudo")}, args...)
+		svgo = "sudo"
+	}
+	err = exec.Command(svgo, args...).Run()
+	if err != nil {
+		err = CompressSVG(input, output)
+	}
+	return
+}
+
+// 使用GZIP压缩文件
+func CompressByGzip(file string) (err error) {
+	var bs []byte
+	bs, err = ioutil.ReadFile(file)
+	if err != nil {
+		return
+	}
+	var by bytes.Buffer
+	w := gzip.NewWriter(&by)
+	defer w.Close()
+	w.Write(bs)
+	w.Flush()
+	err = ioutil.WriteFile(file, by.Bytes(), 0777)
+	return
+}
+
+// 图片缩放居中裁剪
+//图片缩放居中裁剪
+//@param        file        图片文件
+//@param        width       图片宽度
+//@param        height      图片高度
+//@return       err         错误
+func CropImage(file string, width, height int) (err error) {
+	var img image.Image
+	img, err = imaging.Open(file)
+	if err != nil {
+		return
+	}
+	ext := strings.ToLower(filepath.Ext(file))
+	switch ext {
+	case ".jpeg", ".jpg", ".png", ".gif":
+		img = imaging.Fill(img, width, height, imaging.Center, imaging.CatmullRom)
+	default:
+		err = errors.New("unsupported image format")
+		return
+	}
+	return imaging.Save(img, file)
+}
+
+// 删除切片中的指定key，并返回
+func DeleteSlice(slice []string, keys ...string) []string {
+	if len(keys) == 0 {
+		return slice
+	}
+
+	for _, key := range keys {
+		var tmpSlice []string
+		for _, item := range slice {
+			if item != key {
+				tmpSlice = append(tmpSlice, item)
+			}
+		}
+		slice = tmpSlice
+	}
+
+	return slice
+}
+
+func ComputeFileMD5(file io.Reader) string {
+	md5h := md5.New()
+	io.Copy(md5h, file)
+	return fmt.Sprintf("%x", md5h.Sum(nil))
 }

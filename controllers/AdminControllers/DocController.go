@@ -21,7 +21,7 @@ func (this *DocController) Prepare() {
 	this.BaseController.Prepare()
 	this.Data["IsDoc"] = true
 	cond := orm.NewCondition().And("pid", 0)
-	if data, _, err := models.GetList("category", 1, 20, cond, "sort", "-id"); err != nil {
+	if data, _, err := models.GetList(models.GetTableCategory(), 1, 20, cond, "sort", "-id"); err != nil {
 		helper.Logger.Error(err.Error())
 	} else {
 		this.Data["Chanels"] = data
@@ -37,7 +37,7 @@ func (this *DocController) Get() {
 //文档分类管理
 func (this *DocController) Category() {
 	cond := orm.NewCondition().And("id__gt", 0)
-	data, _, _ := models.GetList("category", 1, 2000, cond, "pid", "sort", "-id")
+	data, _, _ := models.GetList(models.GetTableCategory(), 1, 2000, cond, "pid", "sort", "-id")
 	cates := models.ToTree(data, "Pid", 0)
 	this.Data["Cates"] = cates
 	this.Data["Tab"] = "cate"
@@ -85,7 +85,7 @@ func (this *DocController) List() {
 		sort.Ints(slice)
 		CurId = slice[len(slice)-1]
 	}
-	cates := models.ModelCategory.GetSameLevelCategoryById(CurId)
+	cates := models.NewCategory().GetSameLevelCategoryById(CurId)
 	for _, cate := range cates {
 		if cate.Id == CurId {
 			totalRows = cate.Cnt
@@ -94,7 +94,7 @@ func (this *DocController) List() {
 	this.Data["Cates"] = cates
 	this.Data["CurId"] = CurId
 	this.Data["Level"] = level
-	lists, _, err := models.DocList(uid, chanelid, pid, cid, p, listRows, "Id", 0, 1)
+	lists, _, err := models.GetDocList(uid, chanelid, pid, cid, p, listRows, "Id", 0, 1)
 	if err != nil {
 		helper.Logger.Error("SQL语句执行错误：%v", err.Error())
 	}
@@ -110,8 +110,7 @@ func (this *DocController) Recycle() {
 	//页码处理
 	p = helper.NumberRange(p, 1, 10000)
 	listRows := this.Sys.ListRows
-	this.Data["Lists"], _, _ = models.ModelDocRecycle.RecycleList(p, listRows)
-	fmt.Println(this.Data["Lists"])
+	this.Data["Lists"], _, _ = models.NewDocumentRecycle().RecycleList(p, listRows)
 	this.Data["Tab"] = "recycle"
 	this.TplName = "recycle.html"
 }
@@ -122,10 +121,10 @@ func (this *DocController) AddChanel() {
 	this.ParseForm(&cate)
 	if len(cate.Title) > 0 && len(cate.Alias) > 0 {
 		cate.Status = true
-		models.O.Insert(&cate)
-		this.ResponseJson(1, "频道新增成功")
+		orm.NewOrm().Insert(&cate)
+		this.ResponseJson(true, "频道新增成功")
 	} else {
-		this.ResponseJson(0, "名称和别名均不能为空")
+		this.ResponseJson(false, "名称和别名均不能为空")
 	}
 }
 
@@ -133,13 +132,13 @@ func (this *DocController) AddChanel() {
 func (this *DocController) GetCateByCid() {
 	cid, _ := this.GetInt("Cid")
 	if cid > 0 {
-		if data, _, err := models.GetList(models.TableCategory, 1, 100, orm.NewCondition().And("Pid", cid).And("Status", 1), "sort", "-id"); err != nil {
-			this.ResponseJson(0, err.Error())
+		if data, _, err := models.GetList(models.GetTableCategory(), 1, 100, orm.NewCondition().And("Pid", cid).And("Status", 1), "sort", "-id"); err != nil {
+			this.ResponseJson(false, err.Error())
 		} else {
-			this.ResponseJson(1, "数据获取成功", data)
+			this.ResponseJson(true, "数据获取成功", data)
 		}
 	} else {
-		this.ResponseJson(0, "频道ID参数不正确，必须大于0")
+		this.ResponseJson(false, "频道ID参数不正确，必须大于0")
 	}
 
 }
@@ -167,22 +166,22 @@ func (this *DocController) AddCate() {
 		}
 	}
 	if l := len(cates); l > 0 {
-		if _, err := models.O.InsertMulti(l, &cates); err != nil {
-			this.ResponseJson(0, err.Error())
+		if _, err := orm.NewOrm().InsertMulti(l, &cates); err != nil {
+			this.ResponseJson(false, err.Error())
 		} else {
-			this.ResponseJson(1, "分类添加成功")
+			this.ResponseJson(true, "分类添加成功")
 		}
 	}
-	this.ResponseJson(0, "添加失败，缺少分类")
+	this.ResponseJson(false, "添加失败，缺少分类")
 }
 
 //删除分类
 func (this *DocController) DelCate() {
 	id, _ := this.GetInt("id")
-	if err := models.ModelCategory.Del(id); err != nil {
-		this.ResponseJson(0, err.Error())
+	if err := models.NewCategory().Del(id); err != nil {
+		this.ResponseJson(false, err.Error())
 	}
-	this.ResponseJson(1, "删除成功")
+	this.ResponseJson(true, "删除成功")
 }
 
 //对文档进行操作，type类型的值包括remove（移入回收站），del(删除文档记录)，clear（清空通用户的内容)，deepdel（深度删除，在删除文档记录的同时删除文档文件），forbidden(禁止文档，把文档md5标记为禁止上传，只要文档的md5是这个，则该文档禁止被上传)
@@ -190,42 +189,33 @@ func (this *DocController) Action() {
 	var errs []string
 	ActionType := strings.ToLower(this.GetString("type"))
 	ids := helper.StringSliceToInterfaceSlice(strings.Split(this.GetString("id"), ","))
-
+	recycle := models.NewDocumentRecycle()
 	switch ActionType {
-	case "deepdel": //深度删除，删除文档记录和文档
-	case "recover": //恢复文档，只有文档状态是-1时，才可以进行恢复【OK】
-		if err := models.ModelDocRecycle.RecoverFromRecycle(ids...); err != nil {
+	case "deepdel": //彻底删除文档：删除文档记录的同时也删除文档
+		if err := recycle.DeepDel(ids...); err != nil {
 			errs = append(errs, err.Error())
 		}
-	case "illegal": //将文档标记为非法文档
-		if err := models.ModelDoc.SetIllegal(ids...); err != nil {
+	case "del-row": //只是删除该文档的文档记录
+		if err := recycle.DelRows(ids...); err != nil {
+			errs = append(errs, err.Error())
+		}
+	case "recover": //恢复文档，只有文档状态是-1时，才可以进行恢复【OK】
+		if err := recycle.RecoverFromRecycle(ids...); err != nil {
+			errs = append(errs, err.Error())
+		}
+	case "illegal": //将文档标记为非法文档【OK】
+		if err := models.NewDocument().SetIllegal(ids...); err != nil {
 			errs = append(errs, err.Error())
 		}
 	case "remove": //将文档移入回收站【OK】
-		errs = models.ModelDocRecycle.RemoveToRecycle(this.AdminId, false, ids...)
-	case "clear": //清空用户的分享文档。注意：这时的ids表示的是用户id
-		//先查询用户的分享文档
-		var (
-			docinfo []models.DocumentInfo
-			dids    []interface{}
-		)
-		if _, err := models.O.QueryTable("document_info").Filter("Id__in", ids...).All(&docinfo); err != nil {
-			helper.Logger.Error(err.Error())
+		if err := recycle.RemoveToRecycle(this.AdminId, false, ids...); err != nil {
+			errs = append(errs, err.Error())
 		}
-		for _, info := range docinfo {
-			dids = append(dids, info.Id)
-		}
-		errs = models.ModelDocRecycle.RemoveToRecycle(this.AdminId, false, dids...)
-		//case "illegal": //先将文档移入回收站，然后再将文档进行深度删除
-		//	if errs = models.RemoveToRecycle(this.AdminId, false, ids...); len(errs) == 0 {
-		//		errs = models.DocDeepDel(ids...)
-		//	}
 	}
 	if len(errs) > 0 {
-		this.ResponseJson(0, fmt.Sprintf("操作失败：%v", strings.Join(errs, "; ")))
-	} else {
-		this.ResponseJson(1, "操作成功")
+		this.ResponseJson(false, fmt.Sprintf("操作失败：%v", strings.Join(errs, "; ")))
 	}
+	this.ResponseJson(true, "操作成功")
 }
 
 //获取文档备注模板
@@ -233,18 +223,18 @@ func (this *DocController) RemarkTpl() {
 	if this.Ctx.Request.Method == "GET" {
 		DsId, _ := this.GetInt("dsid")
 		if DsId > 0 {
-			remark := models.ModelDocRemark.GetContentTplByDsId(DsId)
-			this.ResponseJson(1, "获取成功", remark)
+			remark := models.NewDocumentRemark().GetContentTplByDsId(DsId)
+			this.ResponseJson(true, "获取成功", remark)
 		} else {
-			this.ResponseJson(0, "DsId不能为空")
+			this.ResponseJson(false, "DsId不能为空")
 		}
 	} else {
 		var rm models.DocumentRemark
 		this.ParseForm(&rm)
-		if err := models.ModelDocRemark.Insert(rm); err != nil {
-			this.ResponseJson(0, fmt.Sprintf("操作失败：%v", err.Error()))
+		if err := models.NewDocumentRemark().Insert(rm); err != nil {
+			this.ResponseJson(false, fmt.Sprintf("操作失败：%v", err.Error()))
 		} else {
-			this.ResponseJson(1, "操作成功")
+			this.ResponseJson(true, "操作成功")
 		}
 	}
 }

@@ -1,7 +1,16 @@
 
 <div class="container">
     <div class="row">
-        <div class="col-xs-8 wenku-left">
+
+
+    {{template "UserRight" .}}
+
+
+        <div class="col-xs-9 wenku-left">
+
+        {{template "Tabs" .}}
+
+
             <div class="panel panel-default">
                 <div class="panel-heading clearfix">
                     <div class="strong pull-left">文档编辑</div>
@@ -46,6 +55,7 @@
                                     <option value="8" {{if eq .Info.Price 8}}selected="selected"{{end}}>8个金币</option>
                                     <option value="10" {{if eq .Info.Price 10}}selected="selected"{{end}}>10个金币</option>
                                     <option value="20" {{if eq .Info.Price 20}}selected="selected"{{end}}>20个金币</option>
+                                    <option value="-1" {{if eq .Info.Price -1}}selected="selected"{{end}}>禁止下载</option>
                                 </select>
                             </div>
                         </div>
@@ -67,8 +77,6 @@
                 </div>
             </div>
         </div>
-
-        {{template "UserRight" .}}
 
     </div>
 </div>

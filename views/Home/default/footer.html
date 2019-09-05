@@ -16,31 +16,31 @@
     <div class="container-fluid wenku-footer-dark">
     	<div class="container">
     		<div class="row">
-    			<div class="col-xs-12 text-center wenku-help">
+    			<div class="col-xs-12 text-center wenku-help help-block">
 					{{range .Pages}}
 						<a href="/pages/{{.Alias}}" target="_blank" title="{{.Title}}">{{.Name}}</a>
 					{{end}}
     			</div>
-    			<div class="col-xs-12 text-center">
-					{{.Sys.Site}}&nbsp;&nbsp;&copy;2018
+    			<div class="col-xs-12 text-center help-block">
+					{{.Sys.Site}}&nbsp;&nbsp;&copy;{{.CopyrightDate}}&nbsp;&nbsp;<span class="text-muted">|</span>&nbsp;&nbsp;<a href="/sitemap.xml" title="站点地图" target="_blank">站点地图</a>
     			</div>
-    			<div class="col-xs-12 text-center">
-    				Powered By <a href="https://github.com/TruthHun/DocHub" style="color: #1abc9c;" target="_blank" title="DocHub">DocHub</a>
+                <div class="col-xs-12 text-center help-block">
+                    <a href="http://www.miitbeian.gov.cn/" target="_blank" rel="nofollow">粤ICP备18004373号-2</a>
+                </div>
+    			<div class="col-xs-12 text-center help-block">
+					<small>    				Powered By <a href="https://github.com/TruthHun/DocHub" style="color: #1abc9c;" target="_blank" title="DocHub">DocHub</a> {{.Version}}
+                    </small>
     			</div>
+
 				<div class="col-xs-12 text-center">{{str2html .Sys.Tongji}}</div>
 			</div>
     	</div>
     </div>
 
 
-
-
-    <!--<script src="http://cdn.bootcss.com/jquery/1.11.1/jquery.min.js"></script>-->
-	<script src="//apps.bdimg.com/libs/jquery/1.11.3/jquery.min.js"></script>
-    <!--<script src="{{.TplStatic}}/js/bootstrap.min.js"></script>-->
-	<script src="//apps.bdimg.com/libs/bootstrap/3.3.0/js/bootstrap.min.js"></script>
+	<script src="/static/Common/js/jquery.min.js"></script>
+    <script src="{{.TplStatic}}/js/bootstrap.min.js"></script>
 	<script src="/static/Common/js/jquery.toast.min.js"></script>
-	<!--<script src="/static/Common/js/jquery.lazyload.min.js"></script>-->
 	{{if .IsUpload}}
 	<script src="/static/Common/js/spark-md5.min.js"></script>
 	{{end}}

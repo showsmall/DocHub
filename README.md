@@ -2,6 +2,13 @@
 
 ------
 
+Thinks for [JetBrains](https://www.jetbrains.com/?from=DocHub)'s `free JetBrains Open Source license(s)`
+ 
+[![LOGO](static/Common/img/jetbrains.png)](https://www.jetbrains.com/?from=DocHub)
+
+
+------
+
 目录：
 - [文库简介](#intro)
     - [程序命名](#name)
@@ -20,8 +27,8 @@
     - [文档在线阅读](#read-svg)
     - [office文档在线阅读](#read-office)
     - [PDF文档在线阅读](#read-pdf)
-    - [mobi、epub、chm文档在线阅读【TODO】](#read-other)
-    - [全文搜索【TODO】](#es)
+    - [mobi、epub、chm文档在线阅读](#read-other)
+    - [全文搜索](#es)
     - [文档采集功能【TODO】](#crawl)
     - [积分功能](#score)
     - [阅读文档水印功能](#watermark)
@@ -40,6 +47,18 @@
 > 重要：所有`fork`了`DocHub`项目的朋友，麻烦同时点一下`watch`，以便关注项目更新动态和跟进一些重要的Bug的修复。
 
 > 提示：DocHub移动端模板已经放出来，[链接地址](#tpl-mobile)
+
+> 说明(于2018-06-08)：`DocHub`项目是我学完Go语言之后的第二个独立开发的Go语言项目，项目是在2016年12月份开始开发的。当时对Go语言和Beego框架都还不怎么熟。`DocHub`项目开源出来之后，看到`star`飙升的有点快(相对个人之前的开源项目)，非常感谢大家的认可和厚爱，然后自己诚惶诚恐地认真review了一遍代码...
+路由在模板页面写死了...
+数据表一些数据字段也出现了冗余...
+有些函数和方法封装，难以使用的一塌糊涂...
+请大家给我点时间，我会把整套程序都优化好，当然，现在的版本是可用的，以后的升级版本也会是兼容升级。
+
+> __说明(2018-06-12)__：
+> DocHub演示站点：http://dochub.bookstack.cn
+> 后台地址是：http://dochub.bookstack.cn/admin ；管理员账号密码均是`admin`；`您心目中的验证码`是`芝麻开门`。
+> 安装和部署教程以及Docker镜像，稍后跟上。
+
 
 <a name="intro"></a>
 ## 文库简介
@@ -160,13 +179,13 @@ office --> pdf --> svg
 > 没有使用mozila的`pdf.js`作为PDF文档阅读的实现方案，主要是我没有解决`pdf.js`分片分页加载的问题，每次都需要将整个PDF文档下载下来才能提供阅读。如果文档大的话，用户需要等待好长时间，而且也比较耗费服务器带宽资源。
 
 <a name="read-other"></a>
-#### mobi、epub、chm文档在线阅读【TODO】
+#### mobi、epub、chm文档在线阅读
 使用`calibre`将文档转成PDF，然后pdf再转svg。
 
 > 目前该功能还没实现，epub、mobi等文档，现在还是暂时不能在线阅读
 
 <a name="es"></a>
-### 全文搜索【TODO】
+### 全文搜索
 全文搜索功能，之前是使用`coreseek`开发实现了这个功能的，但是现在`coreseek`的官网都已经挂了...打算用`elasticsearch`重新实现这个功能。
 
 <a name="crawl"></a>
@@ -240,8 +259,6 @@ https://www.sogou.com/web?query=filetype%3Apdf+%E5%85%A5%E9%97%A8%E6%95%99%E7%A8
 当运行程序的时候，程序会自动初始化数据，默认的初始管理员账号密码均是`admin`
 
 但是由于环境依赖安装问题，所以有必要整理一个使用教程处理，使用教程放在[书栈网(BookStack)](https://www.bookstack.cn)上，教程地址：[https://www.bookstack.cn/books/dochub](https://www.bookstack.cn/books/dochub)
-
-> 注意：目前暂时还没时间撰写，会尽快把部署教程写出来的
 
 <a name="demo"></a>
 ## 演示站点

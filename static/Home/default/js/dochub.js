@@ -3,6 +3,7 @@
  * Email:	TruthHun@QQ.COM
  * Date:	2016-12-28
  * */
+'use strict';
 $(function(){
     console.log("Powered By DocHub");
 
@@ -98,19 +99,8 @@ $(function(){
 	
 	//文库文件上传
 	if (PageId=="wenku-upload"){
-		var cates=obj=eval("("+$("#wenku-cates").text()+")");
-		function options(pid) {
-			var chanel=[];
-            $.each(cates,function () {
-                if (this.Pid==pid){
-                    chanel.push('<option value="'+this.Id+'">'+this.Title+'</option>');
-                }
-            });
-            return chanel.join(",")
-        }
-
-
-		$(".wenku-form-upload select[name=Chanel]").append(options(0));
+		var obj=eval("("+$("#wenku-cates").text()+")"),cates=obj;
+		$(".wenku-form-upload select[name=Chanel]").append(options(0,cates));
 
         //选择上传文件
 		$(document).on("change",".wenku-form-upload input[type=file]",function(){
@@ -195,7 +185,7 @@ $(function(){
 			var _this=$(this),pid=_this.val();
 			if(pid){
                 $(".form-level-one select").html('<option value="">请选择一级文档分类</option>');
-                $(".form-level-one select").append(options(pid));
+                $(".form-level-one select").append(options(pid,cates));
 				$(".form-level-two select").html('<option value="">请选择二级文档分类</option>');
 			}else{
                 $(".form-level-one select").html('<option value="">请选择一级文档分类</option>');
@@ -208,7 +198,7 @@ $(function(){
 			var _this=$(this),pid=_this.val();
 			$(".form-level-two select").html('<option value="">请选择二级文档分类</option>');
 			if(pid){
-                $(".form-level-two select").append(options(pid));
+                $(".form-level-two select").append(options(pid,cates));
 			};
 		});
 	
@@ -232,7 +222,7 @@ $(function(){
 			}
 			if(req_len==0){
 				$.get(url_checklogin,function(ret){
-					if(ret==0){
+					if(ret.status==0){
 						wenku_alert("danger","您当前未登录，请先登录",3000,"");
 						_this.removeClass("disabled");
 					}else{
@@ -252,13 +242,54 @@ $(function(){
                                 _this.addClass("disabled");
                                 var tips='<div class="wenku-progress">\n' +
                                     '\t\t<div class="text-center">\n' +
-                                    '\t\t\t<img src="/static/Home/default/img/run.gif" class="thumbnail thumbnail-avatar" alt="玩命上传中" style="width: 200px;margin: 0px auto;">\n' +
+                                    '\t\t\t<img src="/static/Home/default/img/run.gif" class="thumbnail thumbnail-avatar" alt="玩命上传中" style="width: 200px;margin: 0px auto 15px;">\n' +
                                     '\t\t\t<h3 class="help-block">玩命上传中，请耐心等待...</h3>\n' +
+                                    '<div class="progress progress-striped"><div class="progress-bar progress-bar-success" role="progressbar aria-valuemin="0" aria-valuemax="100" style="width: 0%;"><span>0%</span></div></div>' +
                                     '\t\t</div>\n' +
                                     '\t</div>';
                                 _this.parents("body").append(tips);
 								//文档在文档库中不存在
-                                form.submit();
+
+                                var formData = new FormData();
+                                var inputs=form.find(".form-control");
+                                $.each(inputs,function () {
+                                    formData.append($(this).attr("name"), $(this).val());
+                                });
+                                var inputs=form.find("[type=hidden]");
+                                $.each(inputs,function () {
+                                    formData.append($(this).attr("name"), $(this).val());
+                                });
+                                // 获取上传文件，放到 formData对象里面
+
+                                var file = $("[name=File]").get(0).files[0];
+                                formData.append("File" , file);
+                                $.ajax({
+                                    type: "POST",
+                                    url: form.attr("action"),
+                                    data: formData ,　　//这里上传的数据使用了formData 对象
+                                    processData : false,
+                                    //必须false才会自动加上正确的Content-Type
+                                    contentType : false ,
+                                    //这里我们先拿到jQuery产生的 XMLHttpRequest对象，为其增加 progress 事件绑定，然后再返回交给ajax使用
+                                    xhr: function(){
+                                        var xhr = $.ajaxSettings.xhr();
+                                        if(onprogress && xhr.upload) {
+                                            xhr.upload.addEventListener("progress" , onprogress, false);
+                                            return xhr;
+                                        }
+                                    },
+                                    success:function (res) {
+                                        if(res.status==1){//成功
+                                            wenku_alert("success",res.msg,3000,"/user");
+                                        }else{//失败
+                                            wenku_alert("danger",res.msg,3000,"");
+                                        }
+                                    },
+                                    error:function (e) {
+                                        wenku_alert("danger","未知错误，请刷新页面重试",3000,"");
+                                        console.log(e)
+                                    }
+                                });
                             }
                         });
 					}
@@ -269,7 +300,14 @@ $(function(){
 		});
 	
 	}
-	
+    /**
+     * 侦查附件上传情况 ,这个方法大概0.05-0.1秒执行一次，返回上传进度
+     */
+    function onprogress(evt){
+        var per=evt.loaded/evt.total*100,val=per.toFixed(2)+"%";
+        $(".progress .progress-bar").css({"width":val});
+        $(".progress span").text(val);
+    }
 	
 	//文档预览页面
 	if(PageId=="wenku-content"){
@@ -278,7 +316,7 @@ $(function(){
 
 	    //监听下载
         $('#ModalDownload').on('show.bs.modal', function () {
-            // 执行一些动作...
+            // 请求链接其实不应该写死在这里的...
             $.get("/downfree",{id:$("#ModalDownload .btn-submit-download").attr("data-id")},function(ret){
                 if(ret.status==1){
                     $('#ModalDownload .wenku-download-tips').text(ret.msg);
@@ -286,68 +324,17 @@ $(function(){
             });
         });
 
-	    //文库懒加载
-        function WenkuLazyLoad() {
-            var imgs=$("#wenku-viewer .wenku-lazy"),hScrollTop=$(window).scrollTop(),hWinow=$(window).height();
-            $.each(imgs,function () {
-                if(hScrollTop-$(this).offset().top+hWinow>0){
-                    if($(this).attr("src")!=$(this).attr("data-original")){
-                        $(this).attr("src",$(this).attr("data-original")).fadeIn(100);
-                    }
-                    $(".wenku-current-page").text($(this).attr("data-page"));
-                }
-            });
-        }
 
-        //获取当前scale
-        function CurrentScale(number) {
-            if(number){//设置
-                return parseInt($(".wenku-viewer").attr("data-scale",number));
-            }else{
-                return parseInt($(".wenku-viewer").attr("data-scale"));
-            }
-
-        }
-
-        //放大缩小
-        function Scale(number) {
-            //left:col-xs-9 wenku-left wenku-nopadding
-            //right:col-xs-3 wenku-right
-            //number的值是：9、10、11、12
-            if(number==9 || number==10 || number==11 || number==12){
-                $(".wenku-main .wenku-left").attr("class","col-xs-"+number+" wenku-left wenku-nopadding")
-                var r=12-number;
-                $(".wenku-main .wenku-right").attr("class","col-xs-"+r+" wenku-right");
-            }
-        }
-
-        //滚动到指定页
-        function ScrollToPage(page) {
-            $('html,body').animate({scrollTop:$(".wenku-page"+page).offset().top}, 200);
-        }
-
-        //调整当前页，用于文档预览放大或缩小时
-        function AdjustViewer() {
-            ScrollToPage(GetCurrentPage());
-        }
-
-        //获取当前页
-        function GetCurrentPage() {
-            return parseInt($(".wenku-current-page").text());
-        }
-        //获取当前页
-        function GetTotalPage() {
-            return parseInt($(".wenku-total-page").text());
-        }
-        //获取下一批次的起始页
-        function NextStartPage() {
-            return parseInt($(".wenku-viewer-more").attr("data-next"));
-        }
 
         WenkuLazyLoad();//document ready也调用一次
+        var timeout;
         $(window).on("scroll",function () {
-            WenkuLazyLoad();
+            clearTimeout(timeout);//避免短时间内重复计算
+            timeout=setTimeout(function () {
+                WenkuLazyLoad();
+            },30);
         });
+
         $(window).on("resize",function () {
             WenkuLazyLoad();
         });
@@ -385,14 +372,21 @@ $(function(){
                 }
             }
         });
+
         //下一页
         $(".wenku-page-next").click(function(){
+            //如果下一页正在加载中，则不再执行下一页请求
             if($(".wenku-page-next").attr("data-loading")==1) return false;
+            //设置下一页的状态为正在加载中
             $(".wenku-page-next").attr("data-loading",1);
-            var nextPage=GetCurrentPage()+1,nextStart=NextStartPage(),total=GetTotalPage();
+
+            var nextPage=GetCurrentPage()+1,//下一页
+                nextStart=NextStartPage(),//下一批次页面
+                total=GetTotalPage();//总页数
             var limit=nextStart>0?nextStart:total;
             if(nextPage<limit){
-                var hWindow=$(window).height(),hPage=$(".wenku-page"+nextPage).height();
+                var hWindow=$(window).height(),//窗口高度
+                    hPage=$(".wenku-page"+nextPage).height();//下一页的高度
                 if(hPage>hWindow){//文档页面高度与窗口高度做比较
                     ScrollToPage(nextPage);
                 }else{
@@ -429,7 +423,7 @@ $(function(){
         });
         //放大
         $(".wenku-scale-plus").click(function () {
-            cur=CurrentScale()+1;
+            var cur=CurrentScale()+1;
             if(cur<=12){
                 Scale(cur);
                 CurrentScale(cur);
@@ -438,7 +432,7 @@ $(function(){
         });
         //缩小
         $(".wenku-scale-minus").click(function () {
-            cur=CurrentScale()-1;
+            var cur=CurrentScale()-1;
             if(cur>=9){
                 Scale(cur);
                 CurrentScale(cur);
@@ -626,10 +620,6 @@ $(function(){
             $(".wenku-comment-num").text(len-$(this).val().length);
         });
 
-
-
-
-		
 	}
 	
 
@@ -648,7 +638,7 @@ $(function(){
 					if(ret.data){
 						$.each(ret.data,function () {
                             html+='<li class="clearfix help-block">';
-                            html+='<div class="col-xs-3">'+this.TimeCreate+'</div>';
+                            html+='<div class="col-xs-3">'+parseDate(this.TimeCreate)+'</div>';
                             html+='<div class="col-xs-1">';
                             if(this.Coin>-1){
                                 html+= '<span class="text-primary"> + '+this.Coin+'</span>';
@@ -672,26 +662,15 @@ $(function(){
 		var js=$("#wenku-cates").text();
 		if(js){
             var cates=eval("("+js+")");
-            function options(pid) {
-                var chanel=[];
-                $.each(cates,function () {
-                    if (this.Pid==pid){
-                        chanel.push('<option value="'+this.Id+'">'+this.Title+'</option>');
-                    }
-                });
-                return chanel.join(",")
-            }
-            function setDefault(name,val) {
-                $(".wenku-form-upload select[name="+name+"] option[value="+val+"]").attr("selected","selected");
-            }
+
             var defChanel=$(".wenku-form-upload select[name=Chanel]").attr("data-default");
             var defPid=$(".wenku-form-upload select[name=Pid]").attr("data-default");
             var defCid=$(".wenku-form-upload select[name=Cid]").attr("data-default");
-            $(".wenku-form-upload select[name=Chanel]").append(options(0));
+            $(".wenku-form-upload select[name=Chanel]").append(options(0,cates));
             setDefault("Chanel",defChanel);
-            $(".wenku-form-upload select[name=Pid]").append(options(defChanel));
+            $(".wenku-form-upload select[name=Pid]").append(options(defChanel,cates));
             setDefault("Pid",defPid);
-            $(".wenku-form-upload select[name=Cid]").append(options(defPid));
+            $(".wenku-form-upload select[name=Cid]").append(options(defPid,cates));
             setDefault("Cid",defCid);
 
             //频道选择
@@ -699,7 +678,7 @@ $(function(){
                 var _this=$(this),pid=_this.val();
                 if(pid){
                     $(".form-level-one select").html('<option value="">请选择一级文档分类</option>');
-                    $(".form-level-one select").append(options(pid));
+                    $(".form-level-one select").append(options(pid,cates));
                     $(".form-level-two select").html('<option value="">请选择二级文档分类</option>');
                 }else{
                     $(".form-level-one select").html('<option value="">请选择一级文档分类</option>');
@@ -712,7 +691,7 @@ $(function(){
                 var _this=$(this),pid=_this.val();
                 $(".form-level-two select").html('<option value="">请选择二级文档分类</option>');
                 if(pid){
-                    $(".form-level-two select").append(options(pid));
+                    $(".form-level-two select").append(options(pid,cates));
                 };
             });
 
@@ -728,12 +707,18 @@ $(function(){
         });
 		
 		//编辑收藏夹
-		$("#ModalFolderEditBtn").click(function () {
-			var obj=$(this).parents(".wenku-title"),title=obj.find("h6").text(),desc=obj.find(".help-block").text(),id=$(this).attr("data-id"),form=$("#ModalFolderEdit form");
+		$(".ModalFolderEditBtn").click(function () {
+			var obj=$(this).parents(".wenku-title"),
+                title=obj.find("h6").text(),
+                desc=obj.find(".help-block").text(),
+                id=$(this).attr("data-id"),
+                form=$("#ModalFolderEdit form");
 			form.find("[name=Id]").val(id),form.find("[name=Title]").val(title),form.find("[name=Description]").val(desc);
 			$("#ModalFolderEdit").modal("show");
         });
-		
+
+		console.log($("#wenku-user .wenku-right").height());
+        $("#wenku-user .wenku-left .panel-body").css({"min-height":$("#wenku-user .wenku-right").height()-105});
 
 	}
 
@@ -742,16 +727,12 @@ $(function(){
 	//timeout:超时刷新和跳转时间
 	//url:有url链接的话，跳转url链接
 	function wenku_alert(cls,msg,timeout,url){
-		if(timeout>0){
-			t=timeout
-		}else{
-			t=3000
-		}
+	    var t= timeout>0?parseInt(timeout):3000;
 		if(cls=="error"||cls=="danger"){
 			cls="error";
 		}else{
 			cls="success";
-			position="mid-center";
+			// position="mid-center";
 			close=false;
 		}
         $.toast({
@@ -828,8 +809,8 @@ $(function(){
             _url=location.href;
         }
         if (l>0) return false;
+        _this.addClass("disabled");
         if (method=="post") {
-
             if (form.attr("enctype")=="multipart/form-data"){
                 form.attr("target","notarget");
                 form.submit();
@@ -839,17 +820,17 @@ $(function(){
                         wenku_alert("success",rt.msg,2000,_url);
                     } else{
                         wenku_alert("error",rt.msg,3000,"");
+                        _this.removeClass("disabled");
                     }
                 });
-                _this.removeClass("disabled");
             }
-
         } else{
             $.get(action,data,function(rt){
                 if (rt.status==1) {
                     wenku_alert("success",rt.msg,2000,_url);
                 } else{
                     wenku_alert("error",rt.msg,3000,"");
+                    _this.removeClass("disabled");
                 }
             });
         }
@@ -857,18 +838,106 @@ $(function(){
 
 
     //iframe加载后处理
+    //TODO:移除和改善
     $("#notarget").load(function(){
         var data = $(window.frames['notarget'].document.body).find("pre").html();
         var obj=eval('(' + data + ')');
-        if (obj.status==1) {
-            wenku_alert("success",obj.msg,5000,location.pathname+"?t="+new Date());
-        } else{
-            wenku_alert("danger",obj.msg,2500,"");
+        if (obj!=undefined){
+            if (obj.status==1) {
+                wenku_alert("success",obj.msg,5000,location.pathname+"?t="+new Date());
+            } else{
+                wenku_alert("danger",obj.msg,2500,"");
+            }
         }
     });
 
 
     $(".wenku-tooltip").tooltip();
+
+    //文库懒加载
+    function WenkuLazyLoad() {
+        var imgs=$("#wenku-viewer .wenku-lazy"),hScrollTop=$(window).scrollTop(),hWinow=$(window).height();
+        $.each(imgs,function () {
+            if(hScrollTop-$(this).offset().top+hWinow>0){
+                if($(this).attr("src")!=$(this).attr("data-original")){
+                    $(this).attr("src",$(this).attr("data-original")).fadeIn(100);
+                    // $(this).removeClass("wenku-lazy");
+                }
+                $(".wenku-current-page").text($(this).attr("data-page"));
+            }
+        });
+    }
+
+    //获取当前scale
+    function CurrentScale(number) {
+        if(number){//设置
+            return parseInt($(".wenku-viewer").attr("data-scale",number));
+        }else{
+            return parseInt($(".wenku-viewer").attr("data-scale"));
+        }
+
+    }
+
+    //放大缩小
+    function Scale(number) {
+        //left:col-xs-9 wenku-left wenku-nopadding
+        //right:col-xs-3 wenku-right
+        //number的值是：9、10、11、12
+        if(number==9 || number==10 || number==11 || number==12){
+            $(".wenku-main .wenku-left").attr("class","col-xs-"+number+" wenku-left wenku-nopadding")
+            var r=12-number;
+            $(".wenku-main .wenku-right").attr("class","col-xs-"+r+" wenku-right");
+        }
+    }
+
+    //滚动到指定页
+    function ScrollToPage(page) {
+        $('html,body').animate({scrollTop:$(".wenku-page"+page).offset().top}, 200);
+    }
+
+    //调整当前页，用于文档预览放大或缩小时
+    function AdjustViewer() {
+        ScrollToPage(GetCurrentPage());
+    }
+
+
+
+    //获取当前页
+    function GetCurrentPage() {
+        return parseInt($(".wenku-current-page").text());
+    }
+    //获取当前页
+    function GetTotalPage() {
+        return parseInt($(".wenku-total-page").text());
+    }
+    //获取下一批次的起始页
+    function NextStartPage() {
+        return parseInt($(".wenku-viewer-more").attr("data-next"));
+    }
+
+    //表单文档上传的分类选项
+    //@param        pid         父级id
+    //@param        cates       分类
+    function options(pid,cates) {
+        var chanel=[];
+        $.each(cates,function () {
+            if (this.Pid==pid){
+                chanel.push('<option value="'+this.Id+'">'+this.Title+'</option>');
+            }
+        });
+        return chanel.join(",")
+    }
+
+    function setDefault(name,val) {
+        $(".wenku-form-upload select[name="+name+"] option[value="+val+"]").attr("selected","selected");
+    }
+
+    //将时间戳转成日期，timestamp是时间戳，单位为秒
+    function parseDate(timestamp) {
+        var t = parseInt(timestamp)*1000
+        var tObj =new Date(t);
+        return tObj.toLocaleDateString().replace(/\//g, "-") + " " + tObj.toTimeString().substr(0, 8)
+    }
 
 });
 
